@@ -542,6 +542,25 @@ struct JSONParser {
           case 'r' : val += '\r'; break;
           case 't' : val += '\t'; break;
           case 'u' : {
+                      if ((str.at(offset+1) == '0') && (str.at(offset+2) == '0')) {
+                        char v = 0;
+                        for( size_t i = 3; i <= 4; ++i ) {
+                          v <<= 4;
+                          c = str.at(offset+i);
+                          if(c >= '0' && c <= '9') v += c-'0';
+                          else if (c >= 'a' && c <= 'f') v += c-'a'+10;
+                          else if (c >= 'A' && c <= 'F') v += c-'A'+10;
+                          else {
+                            v = 0;
+                            break;
+                          }
+                        }
+                        if (v) {
+                          val += v;
+                          offset += 4;
+                          break;
+                        }
+                      }
                        val += "\\u" ;
                        for( size_t i = 1; i <= 4; ++i ) {
                          c = str.at(offset+i);
