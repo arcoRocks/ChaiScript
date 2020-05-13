@@ -1,7 +1,7 @@
 // This file is distributed under the BSD License.
 // See "license.txt" for details.
 // Copyright 2009-2012, Jonathan Turner (jonathan@emptycrate.com)
-// Copyright 2009-2017, Jason Turner (jason@emptycrate.com)
+// Copyright 2009-2018, Jason Turner (jason@emptycrate.com)
 // http://www.chaiscript.com
 
 #ifndef CHAISCRIPT_OPTIMIZER_HPP_
@@ -24,13 +24,13 @@ namespace chaiscript {
 
       template<typename Tracer>
       auto optimize(eval::AST_Node_Impl_Ptr<Tracer> p) {
-        (void)std::initializer_list<int>{ (p = static_cast<T&>(*this).optimize(std::move(p)), 0)... };
+        ( (p = static_cast<T&>(*this).optimize(std::move(p))), ... );
         return p;
       }
     };
 
     template<typename T>
-      eval::AST_Node_Impl<T> &child_at(eval::AST_Node_Impl<T> &node, const size_t offset) {
+      eval::AST_Node_Impl<T> &child_at(eval::AST_Node_Impl<T> &node, const size_t offset) noexcept {
         if (node.children[offset]->identifier == AST_Node_Type::Compiled) {
           return *(dynamic_cast<eval::Compiled_AST_Node<T> &>(*node.children[offset]).m_original_node);
         } else {
@@ -39,7 +39,7 @@ namespace chaiscript {
       }
 
     template<typename T>
-      const eval::AST_Node_Impl<T> &child_at(const eval::AST_Node_Impl<T> &node, const size_t offset) {
+      const eval::AST_Node_Impl<T> &child_at(const eval::AST_Node_Impl<T> &node, const size_t offset) noexcept {
         if (node.children[offset]->identifier == AST_Node_Type::Compiled) {
           return *(dynamic_cast<const eval::Compiled_AST_Node<T> &>(*node.children[offset]).m_original_node);
         } else {
@@ -57,7 +57,7 @@ namespace chaiscript {
       }
 
     template<typename T>
-      auto child_count(const eval::AST_Node_Impl<T> &node) {
+      auto child_count(const eval::AST_Node_Impl<T> &node) noexcept {
         if (node.identifier == AST_Node_Type::Compiled) {
           return dynamic_cast<const eval::Compiled_AST_Node<T>&>(node).m_original_node->children.size();
         } else {
@@ -95,9 +95,9 @@ namespace chaiscript {
     };
 
     template<typename T>
-    bool contains_var_decl_in_scope(const eval::AST_Node_Impl<T> &node)
+    bool contains_var_decl_in_scope(const eval::AST_Node_Impl<T> &node) noexcept
     {
-      if (node.identifier == AST_Node_Type::Var_Decl || node.identifier == AST_Node_Type::Assign_Decl) {
+      if (node.identifier == AST_Node_Type::Var_Decl || node.identifier == AST_Node_Type::Assign_Decl || node.identifier == AST_Node_Type::Reference) {
         return true;
       }
 
@@ -107,6 +107,7 @@ namespace chaiscript {
         const auto &child = child_at(node, i);
         if (child.identifier != AST_Node_Type::Block
             && child.identifier != AST_Node_Type::For
+            && child.identifier != AST_Node_Type::Ranged_For
             && contains_var_decl_in_scope(child)) {
           return true;
         }
@@ -355,7 +356,7 @@ namespace chaiscript {
 
             const auto make_constant = [&node, &fun_name](auto val){
               const auto match = fun_name + "(" + node->children[1]->children[0]->text + ")";
-              return chaiscript::make_unique<eval::AST_Node_Impl<T>, eval::Constant_AST_Node<T>>(std::move(match), node->location, Boxed_Value(val));
+              return chaiscript::make_unique<eval::AST_Node_Impl<T>, eval::Constant_AST_Node<T>>(std::move(match), node->location, const_var(val));
             };
 
             if (fun_name == "double") {
@@ -392,21 +393,21 @@ namespace chaiscript {
         const auto &prefix_node = child_at(*for_node, 2);
 
         if (child_count(*for_node) == 4
-            && eq_node.identifier == AST_Node_Type::Equation
+            && eq_node.identifier == AST_Node_Type::Assign_Decl
             && child_count(eq_node) == 2
-            && child_at(eq_node, 0).identifier == AST_Node_Type::Var_Decl
+            && child_at(eq_node, 0).identifier == AST_Node_Type::Id
             && child_at(eq_node, 1).identifier == AST_Node_Type::Constant
             && binary_node.identifier == AST_Node_Type::Binary
             && binary_node.text == "<"
             && child_count(binary_node) == 2
             && child_at(binary_node, 0).identifier == AST_Node_Type::Id
-            && child_at(binary_node, 0).text == child_at(child_at(eq_node,0), 0).text
+            && child_at(binary_node, 0).text == child_at(eq_node,0).text
             && child_at(binary_node, 1).identifier == AST_Node_Type::Constant
             && prefix_node.identifier == AST_Node_Type::Prefix
             && prefix_node.text == "++"
             && child_count(prefix_node) == 1
             && child_at(prefix_node, 0).identifier == AST_Node_Type::Id
-            && child_at(prefix_node, 0).text == child_at(child_at(eq_node,0), 0).text)
+            && child_at(prefix_node, 0).text == child_at(eq_node,0).text)
         {
           const Boxed_Value &begin = dynamic_cast<const eval::Constant_AST_Node<T> &>(child_at(eq_node, 1)).m_value;
           const Boxed_Value &end = dynamic_cast<const eval::Constant_AST_Node<T> &>(child_at(binary_node, 1)).m_value;
@@ -468,3 +469,4 @@ namespace chaiscript {
 
 
 #endif
+
